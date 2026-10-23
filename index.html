@@ -1,0 +1,1096 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c111b">
+  <title>Discord Activity Graf Viewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0c111b;
+      color: #e8edf7;
+      font-synthesis: none;
+      --muted: #8995aa;
+      --line: #273142;
+      --panel: #131b29;
+      --accent: #8b9cff;
+      --accent-soft: #26335d;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 50% -35%, #202b4a 0, transparent 62%), #0c111b; }
+    button { font: inherit; }
+    .shell { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 54px 0 40px; }
+    .eyebrow { margin: 0 0 9px; color: #aab7ff; font-size: 12px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; line-height: 1.12; }
+    .intro { max-width: 690px; margin: 14px 0 27px; color: #a3aec1; font-size: 15px; line-height: 1.65; }
+    .toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 9px 16px; margin-bottom: 10px; }
+    .load-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 0 17px; border: 1px solid #9eacff; border-radius: 10px; background: #8998f5; color: #101629; font-weight: 750; cursor: pointer; transition: background .15s, transform .15s; }
+    .load-button:hover { background: #a1adff; transform: translateY(-1px); }
+    .load-button:focus-visible, .range-button:focus-visible, .plot:focus-visible { outline: 3px solid #e1e5ff; outline-offset: 3px; }
+    .load-button svg { width: 18px; height: 18px; }
+    #folderInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+    .privacy-note { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+    .privacy-note svg { flex: 0 0 auto; width: 15px; height: 15px; color: #91d7bd; }
+    .status { min-height: 20px; margin: 0 0 15px; color: var(--muted); font-size: 13px; }
+    .status.error { color: #ff9d9d; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 15px; }
+    .stat, .card { border: 1px solid #222d3e; border-radius: 15px; background: color-mix(in srgb, var(--panel) 93%, transparent); box-shadow: 0 12px 35px #03071226; }
+    .stat { min-height: 88px; padding: 16px 18px; }
+    .stat-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 650; }
+    .stat-value { display: block; overflow: hidden; color: #f3f5fc; font-size: 22px; font-weight: 760; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
+    .card { padding: 21px 22px 14px; }
+    .card-head { display: grid; gap: 12px; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: 16px; font-weight: 700; }
+    .range-control { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid #2a3548; border-radius: 10px; background: #0e1521; }
+    .range-button { padding: 7px 12px; border: 0; border-radius: 7px; background: transparent; color: #a4afc1; font-size: 13px; font-weight: 670; cursor: pointer; }
+    .range-button[aria-pressed="true"] { background: var(--accent-soft); color: #e1e6ff; }
+    .select-label { display: flex; align-items: center; gap: 9px; color: #a4afc1; font-size: 13px; font-weight: 650; }
+    .select-control { max-width: min(390px, 62vw); min-height: 36px; padding: 0 32px 0 11px; border: 1px solid #344056; border-radius: 8px; background: #0e1521; color: #e5eafa; font: inherit; }
+    .chart-controls { display: grid; gap: 10px; }
+    .filter-controls, .view-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 14px; }
+    .index-details { grid-column: 1 / -1; justify-self: start; color: #9eabc0; font-size: 12px; }
+    .index-details summary, .filter-panel summary { cursor: pointer; color: #aab7ff; font-weight: 650; }
+    .index-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0 2px; }
+    .toolbar > .privacy-note { justify-self: end; }
+    .view-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+    .view-select { display: flex; align-items: center; gap: 8px; color: #a4afc1; font-size: 12px; font-weight: 650; }
+    .view-select .select-control { min-height: 34px; max-width: 180px; font-size: 12px; }
+    .chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .card-head { gap: 14px; }
+    .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 11px; border-top: 1px solid #222e41; }
+    .filter-row .select-control { width: min(430px, 100%); max-width: 100%; }
+    .filter-help { color: #8995aa; font-size: 12px; }
+    .navigator { margin: 7px 8px 0; padding: 9px 10px 0; border-top: 1px solid #222e41; }
+    .navigator[hidden] { display: none; }
+    .navigator-head, .navigator-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #93a0b5; font-size: 11px; }
+    .navigator-head strong { color: #dce3f1; font-size: 12px; font-weight: 650; }
+    .range-brush { position: relative; height: 34px; margin: 5px 8px 2px; --range-left: 0%; --range-width: 100%; }
+    .range-brush::before { position: absolute; top: 15px; right: 0; left: 0; height: 4px; border-radius: 4px; background: #2a3548; content: ""; }
+    .range-selection { position: absolute; top: 15px; left: var(--range-left); width: var(--range-width); height: 4px; border-radius: 4px; background: #8998f5; pointer-events: none; }
+    .range-brush input[type="range"] { position: absolute; top: 0; left: 0; width: 100%; height: 34px; margin: 0; appearance: none; background: transparent; pointer-events: none; }
+    .range-brush input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+    .range-brush input[type="range"]::-moz-range-track { height: 4px; background: transparent; }
+    .range-brush input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -6px; appearance: none; border: 2px solid #dfe4ff; border-radius: 50%; background: #8998f5; box-shadow: 0 0 0 3px #141c2c; cursor: ew-resize; pointer-events: auto; }
+    .range-brush input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid #dfe4ff; border-radius: 50%; background: #8998f5; box-shadow: 0 0 0 3px #141c2c; cursor: ew-resize; pointer-events: auto; }
+    .range-brush input[type="range"]:focus-visible { outline: none; }
+    .range-brush input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px #141c2c, 0 0 0 6px #e1e5ff; }
+    .range-brush input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px #141c2c, 0 0 0 6px #e1e5ff; }
+    .analytics-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .85fr); gap: 14px; margin-top: 14px; }
+    .analytics-heading { grid-column: 1 / -1; margin: 0; color: #8995aa; font-size: 12px; }
+    .analytics-card { padding: 19px 20px; border: 1px solid #222d3e; border-radius: 15px; background: color-mix(in srgb, var(--panel) 93%, transparent); }
+    .directory-card { grid-column: 1 / -1; }
+    .analytics-card h2 { margin: 0 0 17px; }
+    .weekday-list { display: grid; gap: 11px; }
+    .weekday-row { display: grid; grid-template-columns: 86px minmax(50px, 1fr) 116px; align-items: center; gap: 11px; color: #aab5c7; font-size: 12px; }
+    .weekday-name { text-transform: capitalize; }
+    .bar-track { height: 8px; overflow: hidden; border-radius: 10px; background: #212c3d; }
+    .bar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7889f2, #a0acff); }
+    .weekday-count { color: #dce3f1; text-align: right; font-variant-numeric: tabular-nums; }
+    .top-list { display: grid; gap: 8px; }
+    .top-list.scroll-list, .mini-stat-list.scroll-list { max-height: 420px; overflow: auto; padding-right: 4px; }
+    .directory-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .directory-head h2 { margin-bottom: 5px; }
+    .directory-head p { margin: 0; }
+    .directory-search-label { display: grid; gap: 5px; color: #a4afc1; font-size: 12px; }
+    .directory-search, .insight-search { min-height: 34px; padding: 0 10px; border: 1px solid #344056; border-radius: 8px; background: #0e1521; color: #e5eafa; font: inherit; }
+    .directory-search { width: min(280px, 48vw); }
+    .directory-count { margin-bottom: 9px; }
+    .expand-details { margin-top: 12px; border-top: 1px solid #263143; padding-top: 10px; color: #aab7ff; font-size: 12px; }
+    .expand-details summary { cursor: pointer; font-weight: 650; }
+    .expand-body { display: grid; gap: 10px; padding-top: 12px; }
+    .insight-search { width: 100%; }
+    .average-note { margin-top: 7px; color: #dce3f1; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .mini-stat-list { display: grid; gap: 7px; }
+    .mini-stat-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 31px; color: #dce3f1; font-size: 12px; }
+    .mini-stat-rank { color: #8794aa; font-variant-numeric: tabular-nums; }
+    .mini-stat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mini-stat-value { color: #f0f3fc; font-variant-numeric: tabular-nums; }
+    .mini-stat-track { grid-column: 2 / -1; height: 4px; margin-top: -5px; overflow: hidden; border-radius: 4px; background: #212c3d; }
+    .mini-stat-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7889f2, #a0acff); }
+    .hourly-list .mini-stat-row { grid-template-columns: 42px minmax(0, 1fr) auto; }
+    .empty-list { padding: 10px 0; color: #8995aa; font-size: 12px; }
+    .top-channel { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 11px; border: 1px solid #263143; border-radius: 9px; background: #101827; color: #e5eafa; text-align: left; }
+    .top-channel-name { overflow: hidden; color: #bec9db; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .top-channel-count { flex: 0 0 auto; color: #f3f5fc; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .split-metric { padding: 12px 0; border-top: 1px solid #263143; }
+    .split-metric:first-of-type { padding-top: 0; border-top: 0; }
+    .split-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: #c3ccda; font-size: 13px; }
+    .split-head strong { color: #f1f3fa; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .split-sub { color: #8491a6; font-size: 12px; }
+    .chart-tooltip { position: absolute; z-index: 3; display: none; min-width: 116px; padding: 9px 11px; border: 1px solid #4a5875; border-radius: 9px; background: #0a101b; color: #f4f6ff; box-shadow: 0 8px 24px #0008; font-size: 12px; line-height: 1.45; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); }
+    .chart-tooltip.visible { display: block; }
+    .chart-tooltip strong { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .data-note { margin: 13px 2px 0; color: #8592a6; font-size: 12px; line-height: 1.55; }
+    .chart-wrap { position: relative; width: 100%; min-height: 320px; }
+    .plot { display: block; width: 100%; height: auto; min-height: 320px; overflow: visible; }
+    .empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #9aa6ba; text-align: center; pointer-events: none; }
+    .empty[hidden] { display: none; }
+    .empty-inner { max-width: 370px; }
+    .empty-icon { display: grid; width: 44px; height: 44px; margin: 0 auto 13px; place-items: center; border: 1px solid #2a3650; border-radius: 13px; background: #18233a; color: #aab7ff; }
+    .empty-icon svg { width: 21px; height: 21px; }
+    .empty strong { display: block; margin-bottom: 6px; color: #dfe5f1; font-size: 15px; }
+    .empty span { font-size: 13px; line-height: 1.55; }
+    .footnote { margin: 13px 2px 0; color: #7d899e; font-size: 12px; line-height: 1.55; }
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 26px, 1160px); padding-top: 34px; }
+      .toolbar { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+      .toolbar > .privacy-note { justify-self: start; }
+      .chart-heading { align-items: flex-start; flex-direction: column; }
+      .directory-head { align-items: stretch; flex-direction: column; }
+      .directory-search { width: 100%; }
+      .intro { font-size: 14px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .stat { min-height: 76px; padding: 12px; }
+      .stat-value { font-size: 18px; }
+      .stat-label { font-size: 11px; }
+      .card { padding: 16px 12px 12px; }
+      .chart-wrap, .plot { min-height: 280px; }
+      .analytics-grid { grid-template-columns: 1fr; }
+      .analytics-card { padding: 16px 14px; }
+      .weekday-row { grid-template-columns: 74px minmax(35px, 1fr) 94px; gap: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">Osobní přehled</p>
+      <h1>Discord Activity</h1>
+      <p class="intro">Prohlédni si, jak se tvoje aktivita v čase měnila. Vyber složku <strong>Zprávy</strong> z Discord exportu a graf spočítá zprávy napříč kanály.</p>
+    </header>
+
+    <section class="toolbar" aria-label="Načtení dat">
+      <button class="load-button" id="chooseFolder" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h6.9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2z"/><path d="M12 10v6m-3-3 3-3 3 3"/></svg>
+        Načíst složku Zprávy
+      </button>
+      <input id="folderInput" type="file" webkitdirectory directory multiple accept=".json,application/json" aria-label="Vyber složku se zprávami">
+      <details class="index-details">
+        <summary>Jména a indexy (volitelné) · tvoje známá ID jsou už nastavená</summary>
+        <div class="index-controls" aria-label="Volitelné indexy">
+          <span class="privacy-note">Indexy doplní další názvy:</span>
+          <button class="range-button" id="chooseChannelIndex" type="button">Kanály a lidé</button>
+          <input id="channelIndexInput" type="file" accept=".json,application/json" hidden>
+          <button class="range-button" id="chooseServerIndex" type="button">Servery</button>
+          <input id="serverIndexInput" type="file" accept=".json,application/json" hidden>
+        </div>
+      </details>
+      <span class="privacy-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 2.7 7.8 7 10 4.3-2.2 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+        Zpracování probíhá jen v tomto prohlížeči.
+      </span>
+    </section>
+      <p id="status" class="status" role="status" aria-live="polite">Vyber složku Zprávy nebo celý rozbalený export. Tvoje mapování ID je přednastavené; index Kanály a lidé doplní další jména, index Servery je volitelný.</p>
+
+    <section class="stats" aria-label="Souhrn aktivity">
+      <div class="stat"><span class="stat-label">Zpráv celkem</span><strong class="stat-value" id="totalMessages">—</strong></div>
+      <div class="stat"><span class="stat-label">Aktivní období</span><strong class="stat-value" id="dateSpan">—</strong></div>
+      <div class="stat"><span class="stat-label">Rekordní den</span><strong class="stat-value" id="peakDay">—</strong></div>
+      <div class="stat"><span class="stat-label">Nejaktivnější den v týdnu</span><strong class="stat-value" id="peakWeekday">—</strong></div>
+    </section>
+
+    <section class="card" aria-labelledby="chartTitle">
+      <div class="card-head">
+        <div class="chart-heading">
+          <h2 id="chartTitle">Počet zpráv v čase</h2>
+          <div class="view-controls">
+            <div class="range-control" role="group" aria-label="Časové měřítko grafu">
+              <button class="range-button" type="button" data-period="day" aria-pressed="true">Dny</button>
+              <button class="range-button" type="button" data-period="week" aria-pressed="false">Týdny</button>
+              <button class="range-button" type="button" data-period="year" aria-pressed="false">Roky</button>
+            </div>
+            <label class="view-select" for="smoothing">Vyhlazení
+              <select class="select-control" id="smoothing"></select>
+            </label>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label class="select-label" for="activityFilter">Filtrovat aktivitu
+            <select class="select-control" id="activityFilter" disabled>
+              <option value="all">Všechny zprávy</option>
+              <optgroup label="Uživatelé"><option value="users:all">Všichni uživatelé</option></optgroup>
+              <optgroup label="Skupiny a servery"><option value="groups:all">Všechny skupiny a servery</option></optgroup>
+            </select>
+          </label>
+          <span class="filter-help">V jednom seznamu vyber uživatele, skupinu nebo server.</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <svg class="plot" id="chart" viewBox="0 0 1000 340" role="img" aria-label="Graf počtu zpráv v čase"></svg>
+        <div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>
+        <div class="empty" id="emptyState">
+          <div class="empty-inner">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19V5m0 14h16"/><path d="m7 15 4-4 3 2 5-7"/></svg></div>
+            <strong>Graf se zobrazí po načtení zpráv</strong>
+            <span>Vyber složku <b>Zprávy</b> z exportu Discordu. Obsah zpráv se nikam neodesílá.</span>
+          </div>
+        </div>
+      </div>
+      <div class="navigator" id="navigator" hidden>
+        <div class="navigator-head"><span>Zobrazené období</span><strong id="windowLabel">—</strong></div>
+        <div class="range-brush" id="rangeBrush" role="group" aria-label="Vyber začátek a konec období">
+          <span class="range-selection" aria-hidden="true"></span>
+          <input id="rangeStartSlider" type="range" min="0" max="0" value="0" step="1" aria-label="Začátek zobrazeného období">
+          <input id="rangeEndSlider" type="range" min="0" max="0" value="0" step="1" aria-label="Konec zobrazeného období">
+        </div>
+        <div class="navigator-foot"><span id="historyStart">—</span><span id="historyEnd">—</span></div>
+      </div>
+      <p class="footnote" id="chartHint">Aktivita znamená počet zpráv v daném období. Zprávy bez textu, například s přílohou, se také počítají.</p>
+    </section>
+
+    <section class="analytics-grid" aria-label="Podrobnější statistiky">
+      <p class="analytics-heading" id="analyticsScope">Statistiky podle vybraných filtrů a období grafu.</p>
+      <div class="analytics-card">
+        <h2>Aktivita podle dne v týdnu</h2>
+        <div class="weekday-list" id="weekdayBreakdown"><span class="split-sub">Načti zprávy pro zobrazení rozdělení.</span></div>
+      </div>
+      <div class="analytics-card">
+        <h2>Všední dny a víkend</h2>
+        <div class="split-metric">
+          <div class="split-head"><span>Po–Pá</span><strong id="workdayPercent">—</strong></div>
+          <div class="bar-track"><div class="bar-fill" id="workdayBar" style="width:0%"></div></div>
+          <div class="split-sub" id="workdayCount">—</div>
+          <div class="average-note" id="workdayAverage">Průměr na jeden všední den: —</div>
+        </div>
+        <div class="split-metric">
+          <div class="split-head"><span>So–Ne</span><strong id="weekendPercent">—</strong></div>
+          <div class="bar-track"><div class="bar-fill" id="weekendBar" style="width:0%"></div></div>
+          <div class="split-sub" id="weekendCount">—</div>
+          <div class="average-note" id="weekendAverage">Průměr na jeden víkendový den: —</div>
+        </div>
+      </div>
+      <div class="analytics-card directory-card">
+        <div class="directory-head"><div><h2>Lidé a konverzace</h2><p class="split-sub">Nejaktivnějších 10 · celý seznam rozbalíš níže.</p></div></div>
+        <div class="top-list" id="topConversations"><span class="split-sub">Načti zprávy pro zobrazení pořadí.</span></div>
+        <details class="expand-details">
+          <summary id="conversationExpandLabel">Zobrazit všechny lidi a konverzace</summary>
+          <div class="expand-body"><label class="directory-search-label" for="conversationSearch">Hledat
+          <input class="directory-search" id="conversationSearch" type="search" placeholder="Jméno nebo konverzace" autocomplete="off">
+          </label><div class="directory-count split-sub" id="conversationCount" aria-live="polite">Načti zprávy pro zobrazení seznamu.</div>
+          <div class="top-list scroll-list" id="allConversations"></div></div>
+        </details>
+        <p class="split-sub" style="margin:12px 0 0">Tento seznam je přehled. Filtr aktivity měň pouze ve výběru nad grafem.</p>
+      </div>
+      <div class="analytics-card">
+        <h2>Nejaktivnější dny</h2>
+        <p class="split-sub">Top 10 podle počtu zpráv.</p>
+        <div class="mini-stat-list" id="topDays"><span class="split-sub">Načti zprávy pro zobrazení pořadí.</span></div>
+        <details class="expand-details"><summary id="daysExpandLabel">Zobrazit všechny dny</summary>
+          <div class="expand-body"><input class="insight-search" id="daySearch" type="search" placeholder="Hledat datum" autocomplete="off"><div class="mini-stat-list scroll-list" id="allDays"></div></div>
+        </details>
+      </div>
+      <div class="analytics-card">
+        <h2>Aktivita podle hodiny</h2>
+        <p class="split-sub">Top 10 hodin podle místního času z exportu.</p>
+        <div class="mini-stat-list hourly-list" id="hourlyActivity"><span class="split-sub">Načti zprávy pro zobrazení.</span></div>
+        <details class="expand-details"><summary>Všech 24 hodin</summary>
+          <div class="expand-body"><div class="mini-stat-list hourly-list" id="allHours"></div></div>
+        </details>
+      </div>
+      <div class="analytics-card">
+        <h2>Nejčastější slova</h2>
+        <p class="split-sub">Top 10 slov z textových zpráv · běžná česká slova jsou vynechána.</p>
+        <div class="mini-stat-list" id="topWords"><span class="split-sub">Načti zprávy pro zobrazení pořadí.</span></div>
+        <details class="expand-details"><summary id="wordsExpandLabel">Zobrazit všechna slova</summary>
+          <div class="expand-body"><input class="insight-search" id="wordSearch" type="search" placeholder="Hledat slovo" autocomplete="off"><div class="mini-stat-list scroll-list" id="allWords"></div></div>
+        </details>
+      </div>
+    </section>
+    <p class="data-note">Soukromé zprávy lze filtrovat podle jména z `Zprávy/index.json` i podle přednastavených ID. Některé účty Discord označil jako odstraněné a jejich jména v exportu chybí; ty se rozliší ID konverzace. Skupinové konverzace se filtrují jako celek, protože export neuvádí autora jednotlivé zprávy.</p>
+  </main>
+
+  <script>
+    (() => {
+      const input = document.getElementById('folderInput');
+      const chooseButton = document.getElementById('chooseFolder');
+      const chooseChannelIndex = document.getElementById('chooseChannelIndex');
+      const chooseServerIndex = document.getElementById('chooseServerIndex');
+      const channelIndexInput = document.getElementById('channelIndexInput');
+      const serverIndexInput = document.getElementById('serverIndexInput');
+      const status = document.getElementById('status');
+      const chart = document.getElementById('chart');
+      const chartHint = document.getElementById('chartHint');
+      const chartWrap = chart.parentElement;
+      const tooltip = document.getElementById('chartTooltip');
+      const emptyState = document.getElementById('emptyState');
+      const totalEl = document.getElementById('totalMessages');
+      const spanEl = document.getElementById('dateSpan');
+      const peakEl = document.getElementById('peakDay');
+      const peakWeekdayEl = document.getElementById('peakWeekday');
+      const activityFilter = document.getElementById('activityFilter');
+      const smoothing = document.getElementById('smoothing');
+      const navigator = document.getElementById('navigator');
+      const rangeBrush = document.getElementById('rangeBrush');
+      const rangeStartSlider = document.getElementById('rangeStartSlider');
+      const rangeEndSlider = document.getElementById('rangeEndSlider');
+      const windowLabel = document.getElementById('windowLabel');
+      const historyStart = document.getElementById('historyStart');
+      const historyEnd = document.getElementById('historyEnd');
+      const weekdayBreakdown = document.getElementById('weekdayBreakdown');
+      const topConversations = document.getElementById('topConversations');
+      const workdayPercent = document.getElementById('workdayPercent');
+      const weekendPercent = document.getElementById('weekendPercent');
+      const workdayCount = document.getElementById('workdayCount');
+      const weekendCount = document.getElementById('weekendCount');
+      const workdayAverage = document.getElementById('workdayAverage');
+      const weekendAverage = document.getElementById('weekendAverage');
+      const workdayBar = document.getElementById('workdayBar');
+      const weekendBar = document.getElementById('weekendBar');
+      const conversationSearch = document.getElementById('conversationSearch');
+      const conversationCount = document.getElementById('conversationCount');
+      const conversationExpandLabel = document.getElementById('conversationExpandLabel');
+      const allConversations = document.getElementById('allConversations');
+      const topDays = document.getElementById('topDays');
+      const allDays = document.getElementById('allDays');
+      const daySearch = document.getElementById('daySearch');
+      const daysExpandLabel = document.getElementById('daysExpandLabel');
+      const hourlyActivity = document.getElementById('hourlyActivity');
+      const allHours = document.getElementById('allHours');
+      const topWords = document.getElementById('topWords');
+      const allWords = document.getElementById('allWords');
+      const wordSearch = document.getElementById('wordSearch');
+      const wordsExpandLabel = document.getElementById('wordsExpandLabel');
+      const analyticsScope = document.getElementById('analyticsScope');
+      const rangeButtons = [...document.querySelectorAll('[data-period]')];
+      const formatter = new Intl.NumberFormat('cs-CZ');
+      const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' });
+      const monthFormatter = new Intl.DateTimeFormat('cs-CZ', { month: 'short', year: 'numeric' });
+      const NS = 'http://www.w3.org/2000/svg';
+      let events = [];
+      let channelRecords = [];
+      let dates = [];
+      let wordIds = new Map();
+      let wordTerms = [];
+      let periodEventsCache = null;
+      let insightData = null;
+      let activityFilterOptions = new Map();
+      let period = 'day';
+      let rangeStart = -1;
+      let rangeEnd = -1;
+      let uploadedChannelIndex = null;
+      let uploadedServerIndex = null;
+
+      const knownPeople = {};
+      const knownChannels = {};
+      const ignoredWords = new Set(('a aby ach aj ale ani ano asi až bez bude budou byl byla byli bylo byly být by bych bychom byste bys co což čemu čím čímž do kde kdo když který která které kteří kterou kam kým kvůli má máte mezi mi mně moc moje může můj na nad nám námi nás naše naši nebo než nic ní níž no o od okolo on ona oni ono pak po pod podle pokud potom pro proč proto protože před přes při právě s se si svoje svá své svůj ta tak také takový tam teď ten tento té to toho tom tomu tuto ty u už v ve vám vás vaše více vy z za ze že jsem jsi jsme jste jsou jeho její jejich jim jich tím tímto tu zde jako jak ještě jen jenom já my hodně velmi trochu prostě fakt určitě tedy kdyby kdy když kdy kdo něco někdo nějak nějaký každý žádný všechno můžeme mohou měl měla měli mělo mít mám máš máme mají jejich někteří'.split(/\s+/)));
+
+      chooseButton.addEventListener('click', () => input.click());
+      chooseChannelIndex.addEventListener('click', () => channelIndexInput.click());
+      chooseServerIndex.addEventListener('click', () => serverIndexInput.click());
+      channelIndexInput.addEventListener('change', () => { uploadedChannelIndex = channelIndexInput.files[0] || null; loadSelectedData(); });
+      serverIndexInput.addEventListener('change', () => { uploadedServerIndex = serverIndexInput.files[0] || null; loadSelectedData(); });
+      activityFilter.addEventListener('change', applyFilters);
+      conversationSearch.addEventListener('input', renderTopConversations);
+      daySearch.addEventListener('input', renderDaySearch);
+      wordSearch.addEventListener('input', renderWordSearch);
+
+      function applyFilters() {
+        if (!events.length) return;
+        dates = getFilteredEvents().map(event => event.date).sort((a, b) => a - b);
+        rangeStart = rangeEnd = -1;
+        renderSummary();
+        renderChart();
+        const selected = activityFilter.selectedOptions[0]?.textContent || 'Všechny zprávy';
+        status.textContent = `Zobrazuji ${formatter.format(dates.length)} zpráv · ${selected}.`;
+      }
+
+      input.addEventListener('change', loadSelectedData);
+      async function loadSelectedData() {
+        const folderFiles = [...input.files];
+        if (!folderFiles.length) return;
+        const allFiles = [...folderFiles, uploadedChannelIndex, uploadedServerIndex].filter(Boolean);
+        const files = allFiles.filter(file => /(^|\/)messages\.json$/i.test(file.webkitRelativePath || file.name));
+        if (!files.length) {
+          showError('Ve vybrané složce nebyl nalezen žádný soubor messages.json. Vyber složku Zprávy z exportu.');
+          return;
+        }
+        status.classList.remove('error');
+        status.textContent = `Načítám ${formatter.format(files.length)} souborů se zprávami…`;
+        chooseButton.disabled = true;
+        try {
+          const result = await parseFiles(files, allFiles, uploadedChannelIndex, uploadedServerIndex);
+          if (result.validFiles === 0) throw new Error('Nepodařilo se načíst žádný platný soubor se zprávami.');
+          if (result.events.length === 0) throw new Error('Ve vybraných souborech nebyla nalezena žádná zpráva s platným časem.');
+          events = result.events;
+          wordIds = result.wordIds;
+          wordTerms = result.wordTerms;
+          channelRecords = result.channels;
+          buildActivityFilter(result.channels);
+          dates = events.map(event => event.date).sort((a, b) => a - b);
+          rangeStart = rangeEnd = -1;
+          renderSummary();
+          renderChart();
+          const skippedFilesText = result.invalidFiles ? ` Přeskočeno souborů s chybným formátem: ${formatter.format(result.invalidFiles)}.` : '';
+          const skippedMessagesText = result.invalidMessages ? ` Přeskočeno zpráv bez platného času: ${formatter.format(result.invalidMessages)}.` : '';
+          status.textContent = `Načteno ${formatter.format(result.validFiles)} souborů, ${formatter.format(dates.length)} zpráv z ${dateFormatter.format(dates[0])} až ${dateFormatter.format(dates.at(-1))}.${skippedFilesText}${skippedMessagesText}`;
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Při načítání nastala neznámá chyba.');
+        } finally {
+          chooseButton.disabled = false;
+        }
+      }
+
+      rangeButtons.forEach(button => button.addEventListener('click', () => {
+        period = button.dataset.period;
+        rangeStart = rangeEnd = -1;
+        updateSmoothingOptions();
+        rangeButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+        if (dates.length) renderChart();
+      }));
+
+      smoothing.addEventListener('change', () => { if (dates.length) renderChart(); });
+      rangeStartSlider.addEventListener('input', () => {
+        rangeStart = Math.min(Number(rangeStartSlider.value), rangeEnd - 1);
+        if (dates.length) renderChart();
+      });
+      rangeEndSlider.addEventListener('input', () => {
+        rangeEnd = Math.max(Number(rangeEndSlider.value), rangeStart + 1);
+        if (dates.length) renderChart();
+      });
+      updateSmoothingOptions();
+
+      async function parseFiles(files, allFiles, manualChannelIndex, manualServerIndex) {
+        const events = [];
+        const parsingWordIds = new Map();
+        const parsingWordTerms = [];
+        const seenIds = new Set();
+        const channelFiles = new Map(allFiles.filter(file => /(^|\/)channel\.json$/i.test(file.webkitRelativePath || file.name)).map(file => [parentKey(file), file]));
+        const isIndexFor = (file, folder) => {
+          const parts = (file.webkitRelativePath || file.name).split('/');
+          return file.name.toLowerCase() === 'index.json' && parts.length >= 2 && parts.at(-2).toLocaleLowerCase('cs-CZ') === folder.toLocaleLowerCase('cs-CZ');
+        };
+        const channelIndexFile = allFiles.find(file => isIndexFor(file, 'Zprávy')) || manualChannelIndex;
+        const serverIndexFile = allFiles.find(file => isIndexFor(file, 'Servery')) || manualServerIndex;
+        const exportNames = await readIndex(channelIndexFile);
+        const serverNames = await readIndex(serverIndexFile);
+        const channels = new Map();
+        let validFiles = 0;
+        let invalidFiles = 0;
+        let invalidMessages = 0;
+        for (const file of files) {
+          const channelKey = parentKey(file) || file.name;
+          let messages;
+          try {
+            const parsed = JSON.parse(await file.text());
+            messages = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.messages) ? parsed.messages : null);
+            if (!messages) throw new Error('Soubor neobsahuje seznam zpráv.');
+            validFiles++;
+          } catch {
+            invalidFiles++;
+            continue;
+          }
+          if (!channels.has(channelKey)) {
+            const metadataFile = channelFiles.get(channelKey);
+            let metadata = null;
+            if (metadataFile) {
+              try { metadata = JSON.parse(await metadataFile.text()); } catch { /* Channel metadata is optional. */ }
+            }
+            channels.set(channelKey, describeChannel(channelKey, metadata, exportNames, serverNames));
+          }
+          for (const message of messages) {
+            if (!message || typeof message !== 'object') { invalidMessages++; continue; }
+            const timestamp = getField(message, ['Timestamp', 'timestamp', 'created_at', 'createdAt', 'date']);
+            const date = parseTimestamp(timestamp);
+            if (!date) { invalidMessages++; continue; }
+            const contents = getField(message, ['Contents', 'contents', 'content', 'text']);
+            const id = getField(message, ['ID', 'id', 'message_id', 'messageId']);
+            if (id !== undefined && id !== null && String(id).length) {
+              const key = String(id);
+              if (seenIds.has(key)) continue;
+              seenIds.add(key);
+            }
+            events.push({ date, channelKey, words: tokenizeMessage(contents, parsingWordIds, parsingWordTerms) });
+          }
+        }
+        const messageCounts = new Map();
+        for (const event of events) messageCounts.set(event.channelKey, (messageCounts.get(event.channelKey) || 0) + 1);
+        return { events, wordIds: parsingWordIds, wordTerms: parsingWordTerms, channels: [...channels.values()].map(channel => ({ ...channel, count: messageCounts.get(channel.key) || 0 })), validFiles, invalidFiles, invalidMessages };
+      }
+
+      function parentKey(file) {
+        const path = file.webkitRelativePath || file.name;
+        const parts = path.split('/');
+        return parts.length > 1 ? parts.at(-2) : '';
+      }
+
+      async function readIndex(file) {
+        if (!file) return {};
+        try {
+          const parsed = JSON.parse(await file.text());
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch { return {}; }
+      }
+
+      function describeChannel(key, metadata, exportNames, serverNames) {
+        const id = String(metadata?.id || key);
+        const type = String(metadata?.type || '');
+        const names = { DM: 'Soukromá zpráva', GROUP_DM: 'Skupinová konverzace', GUILD_TEXT: 'Textový kanál', GUILD_PUBLIC_THREAD: 'Vlákno', GUILD_PRIVATE_THREAD: 'Soukromé vlákno' };
+        const typeName = names[type] || (type ? type.replaceAll('_', ' ').toLocaleLowerCase('cs-CZ') : 'Kanál');
+        const recipientIds = Array.isArray(metadata?.recipients) ? metadata.recipients.map(value => String(value)) : [];
+        const person = knownPeople[id] || (type === 'DM' ? recipientIds.map(recipientId => knownPeople[recipientId]).find(Boolean) : null);
+        const exportName = typeof exportNames[id] === 'string' ? exportNames[id].trim() : '';
+        const dmName = type === 'DM' ? exportName.match(/^Přímá zpráva\s+s\s+uživatelem\s+(.+)$/i)?.[1]?.trim() : null;
+        const isUnknownPerson = !dmName || /^(?:neznámý účastník|odstraněný uživatel)$/i.test(dmName);
+        const personName = person?.name || (!isUnknownPerson ? dmName : null);
+        const usefulExportName = exportName && exportName !== 'None' && !/^Neznámý kanál(?:,|$)/i.test(exportName) && !/^Přímá zpráva\s+s\s+uživatelem\s+(?:Neznámý účastník|Odstraněný uživatel)$/i.test(exportName) ? exportName : '';
+        const missingPerson = type === 'DM' && !personName;
+        const name = personName || knownChannels[id] || usefulExportName || (missingPerson ? `Neznámý účastník · ID ${id}` : (typeof metadata?.name === 'string' && metadata.name.trim() ? metadata.name.trim() : `${typeName} · ID ${id}`));
+        const personKey = personName ? personName.normalize('NFKC').toLocaleLowerCase('cs-CZ') : null;
+        const serverId = String(metadata?.guild?.id || '');
+        const serverName = (typeof metadata?.guild?.name === 'string' && metadata.guild.name.trim()) || serverNames[serverId] || '';
+        const serverKey = serverId || (serverName ? `name:${serverName.normalize('NFKC').toLocaleLowerCase('cs-CZ')}` : null);
+        return { key, id, label: name, type, personName, personKey, serverId, serverName, serverKey };
+      }
+
+      function buildActivityFilter(channels) {
+        const collator = new Intl.Collator('cs-CZ', { sensitivity: 'base', numeric: true });
+        activityFilter.replaceChildren();
+        activityFilterOptions = new Map([['all', { type: 'all' }]]);
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = `Všechny zprávy · ${formatter.format(events.length)}`;
+        activityFilter.append(allOption);
+        const users = document.createElement('optgroup');
+        users.label = 'Uživatelé';
+        const communities = document.createElement('optgroup');
+        communities.label = 'Skupiny a servery';
+        const addOption = (parent, value, label, channelKeys) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          parent.append(option);
+          activityFilterOptions.set(value, { type: 'channels', channelKeys });
+        };
+
+        const userChannels = channels.filter(channel => channel.type === 'DM');
+        const userTotal = userChannels.reduce((sum, channel) => sum + channel.count, 0);
+        addOption(users, 'users:all', `Všichni uživatelé · ${formatter.format(userTotal)}`, userChannels.map(channel => channel.key));
+        const peopleByKey = new Map();
+        for (const channel of userChannels) {
+          const personKey = channel.personKey || `channel:${channel.key}`;
+          const person = peopleByKey.get(personKey) || { name: channel.personName || channel.label, count: 0, channelKeys: [] };
+          person.count += channel.count;
+          person.channelKeys.push(channel.key);
+          peopleByKey.set(personKey, person);
+        }
+        [...peopleByKey.entries()].sort((a, b) => b[1].count - a[1].count || collator.compare(a[1].name, b[1].name))
+          .forEach(([key, person], index) => addOption(users, `user:${index}:${key}`, `${person.name} · ${formatter.format(person.count)}`, person.channelKeys));
+
+        const communityChannels = channels.filter(channel => channel.type === 'GROUP_DM' || channel.serverKey);
+        const communityTotal = communityChannels.reduce((sum, channel) => sum + channel.count, 0);
+        addOption(communities, 'groups:all', `Všechny skupiny a servery · ${formatter.format(communityTotal)}`, communityChannels.map(channel => channel.key));
+        const groups = communityChannels.filter(channel => channel.type === 'GROUP_DM');
+        groups.sort((a, b) => b.count - a.count || collator.compare(a.label, b.label))
+          .forEach((channel, index) => addOption(communities, `group:${index}:${channel.key}`, `Skupina · ${channel.label} · ${formatter.format(channel.count)}`, [channel.key]));
+        const serversByKey = new Map();
+        for (const channel of communityChannels) {
+          if (!channel.serverKey) continue;
+          const server = serversByKey.get(channel.serverKey) || { name: channel.serverName || `Server · ${channel.serverId}`, count: 0, channelKeys: [] };
+          server.count += channel.count;
+          server.channelKeys.push(channel.key);
+          serversByKey.set(channel.serverKey, server);
+        }
+        [...serversByKey.entries()].sort((a, b) => b[1].count - a[1].count || collator.compare(a[1].name, b[1].name))
+          .forEach(([key, server], index) => addOption(communities, `server:${index}:${key}`, `Server · ${server.name} · ${formatter.format(server.count)}`, server.channelKeys));
+
+        activityFilter.append(users, communities);
+        activityFilter.disabled = false;
+        activityFilter.value = 'all';
+      }
+
+      function getFilteredEvents() {
+        const selection = activityFilterOptions.get(activityFilter.value);
+        if (!selection || selection.type === 'all') return events;
+        const channelKeys = new Set(selection.channelKeys);
+        return events.filter(event => channelKeys.has(event.channelKey));
+      }
+
+      function selectedBucketWindow() {
+        if (!dates.length) return null;
+        const rows = bucketData();
+        if (!rows.length) return null;
+        const first = rows[Math.max(0, Math.min(rangeStart, rows.length - 1))].date;
+        const last = rows[Math.max(0, Math.min(rangeEnd, rows.length - 1))].date;
+        const endExclusive = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+        endExclusive.setDate(endExclusive.getDate() + (period === 'day' ? 1 : 7));
+        return { start: first, endExclusive };
+      }
+
+      function getPeriodFilteredEvents() {
+        if (periodEventsCache) return periodEventsCache;
+        const window = selectedBucketWindow();
+        if (!window) return [];
+        periodEventsCache = getFilteredEvents().filter(event => event.date >= window.start && event.date < window.endExclusive);
+        return periodEventsCache;
+      }
+
+      function tokenizeMessage(value, idsByWord = wordIds, termsById = wordTerms) {
+        if (typeof value !== 'string' || !value.trim()) return [];
+        const text = value.replace(/https?:\/\/\S+/gi, ' ').toLocaleLowerCase('cs-CZ');
+        const ids = [];
+        for (const match of text.matchAll(/[\p{L}\p{M}]{3,}/gu)) {
+          const word = match[0];
+          if (ignoredWords.has(word)) continue;
+          let id = idsByWord.get(word);
+          if (id === undefined) {
+            id = termsById.length;
+            idsByWord.set(word, id);
+            termsById.push(word);
+          }
+          ids.push(id);
+        }
+        return ids;
+      }
+
+      function getField(object, names) {
+        for (const name of names) if (Object.prototype.hasOwnProperty.call(object, name)) return object[name];
+        return undefined;
+      }
+
+      function parseTimestamp(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          const date = new Date(value < 1e12 ? value * 1000 : value);
+          return Number.isNaN(date.getTime()) ? null : date;
+        }
+        if (typeof value !== 'string' || !value.trim()) return null;
+        const text = value.trim();
+        // Discord data exports use local-looking timestamps without an offset; preserve that wall-clock time.
+        const local = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/);
+        let date;
+        if (local) {
+          date = new Date(Number(local[1]), Number(local[2]) - 1, Number(local[3]), Number(local[4]), Number(local[5]), Number(local[6] || 0), Number((local[7] || '').padEnd(3, '0').slice(0, 3) || 0));
+          if (date.getFullYear() !== Number(local[1]) || date.getMonth() !== Number(local[2]) - 1 || date.getDate() !== Number(local[3])) return null;
+        } else {
+          date = new Date(text);
+        }
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+
+      function dayKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+      function fromDayKey(key) { const [year, month, day] = key.split('-').map(Number); return new Date(year, month - 1, day); }
+      function mondayOf(date) { const result = new Date(date.getFullYear(), date.getMonth(), date.getDate()); result.setDate(result.getDate() - (result.getDay() + 6) % 7); return result; }
+      function dayAfter(date) { const result = new Date(date.getFullYear(), date.getMonth(), date.getDate()); result.setDate(result.getDate() + 1); return result; }
+
+      function bucketData() {
+        const counts = new Map();
+        const bucketPeriod = period === 'year' ? 'week' : period;
+        for (const date of dates) {
+          let key;
+          if (bucketPeriod === 'day') key = dayKey(date);
+          else key = dayKey(mondayOf(date));
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        const first = dates[0], last = dates.at(-1);
+        const rows = [];
+        let cursor = bucketPeriod === 'week' ? mondayOf(first) : new Date(first.getFullYear(), first.getMonth(), first.getDate());
+        const end = bucketPeriod === 'week' ? mondayOf(last) : new Date(last.getFullYear(), last.getMonth(), last.getDate());
+        while (cursor <= end) {
+          const key = dayKey(cursor);
+          rows.push({ key, date: new Date(cursor), count: counts.get(key) || 0 });
+          cursor = dayAfter(cursor);
+          if (bucketPeriod === 'week') cursor.setDate(cursor.getDate() + 6);
+        }
+        return rows;
+      }
+
+      function renderSummary() {
+        const counts = new Map();
+        for (const date of dates) counts.set(dayKey(date), (counts.get(dayKey(date)) || 0) + 1);
+        let peak = null;
+        for (const [key, count] of counts) if (!peak || count > peak.count) peak = { key, count };
+        totalEl.textContent = formatter.format(dates.length);
+        spanEl.textContent = `${dateFormatter.format(dates[0])} – ${dateFormatter.format(dates.at(-1))}`;
+        peakEl.textContent = peak ? `${formatter.format(peak.count)} · ${dateFormatter.format(fromDayKey(peak.key))}` : '—';
+        const weekdays = Array(7).fill(0);
+        for (const date of dates) weekdays[(date.getDay() + 6) % 7]++;
+        const mostActive = Math.max(...weekdays);
+        const weekdayIndex = weekdays.indexOf(mostActive);
+        const names = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
+        peakWeekdayEl.textContent = dates.length ? `${names[weekdayIndex]} · ${Math.round(mostActive / dates.length * 100)} %` : '—';
+      }
+
+      function renderWeekdayStats() {
+        const counts = Array(7).fill(0);
+        const scopedEvents = getPeriodFilteredEvents();
+        for (const event of scopedEvents) counts[(event.date.getDay() + 6) % 7]++;
+        const total = counts.reduce((sum, count) => sum + count, 0);
+        const names = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
+        const max = Math.max(1, ...counts);
+        weekdayBreakdown.replaceChildren();
+        counts.forEach((count, index) => {
+          const row = document.createElement('div');
+          row.className = 'weekday-row';
+          const name = document.createElement('span');
+          name.className = 'weekday-name';
+          name.textContent = names[index];
+          const track = document.createElement('div');
+          track.className = 'bar-track';
+          const fill = document.createElement('div');
+          fill.className = 'bar-fill';
+          fill.style.width = `${count / max * 100}%`;
+          track.append(fill);
+          const value = document.createElement('span');
+          value.className = 'weekday-count';
+          value.textContent = `${formatter.format(count)} · ${total ? (count / total * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 }) : '0'} %`;
+          row.append(name, track, value);
+          weekdayBreakdown.append(row);
+        });
+        const workdays = counts.slice(0, 5).reduce((sum, count) => sum + count, 0);
+        const weekends = counts.slice(5).reduce((sum, count) => sum + count, 0);
+        const percent = value => total ? `${(value / total * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} %` : '0 %';
+        const window = selectedBucketWindow();
+        let workdayDates = 0, weekendDates = 0;
+        if (window) {
+          for (let date = new Date(window.start); date < window.endExclusive; date.setDate(date.getDate() + 1)) {
+            if (date.getDay() === 0 || date.getDay() === 6) weekendDates++;
+            else workdayDates++;
+          }
+        }
+        workdayPercent.textContent = percent(workdays);
+        weekendPercent.textContent = percent(weekends);
+        workdayBar.style.width = total ? `${workdays / total * 100}%` : '0%';
+        weekendBar.style.width = total ? `${weekends / total * 100}%` : '0%';
+        workdayCount.textContent = `${formatter.format(workdays)} zpráv · ${percent(workdays)} z období`;
+        weekendCount.textContent = `${formatter.format(weekends)} zpráv · ${percent(weekends)} z období`;
+        workdayAverage.textContent = `Průměr na jeden všední den: ${workdayDates ? (workdays / workdayDates).toLocaleString('cs-CZ', { maximumFractionDigits: 1 }) : '0'} zpráv (${formatter.format(workdayDates)} dní)`;
+        weekendAverage.textContent = `Průměr na jeden víkendový den: ${weekendDates ? (weekends / weekendDates).toLocaleString('cs-CZ', { maximumFractionDigits: 1 }) : '0'} zpráv (${formatter.format(weekendDates)} dní)`;
+      }
+
+      function renderTopConversations() {
+        const scopedEvents = getPeriodFilteredEvents();
+        const counts = new Map();
+        for (const event of scopedEvents) counts.set(event.channelKey, (counts.get(event.channelKey) || 0) + 1);
+        const channels = channelRecords.map(channel => ({ ...channel, count: counts.get(channel.key) || 0 }))
+          .filter(channel => channel.count > 0)
+          .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'cs-CZ'));
+        const total = scopedEvents.length;
+        const query = conversationSearch.value.trim().toLocaleLowerCase('cs-CZ');
+        const matches = channels.filter(channel => `${channel.label} ${channel.id}`.toLocaleLowerCase('cs-CZ').includes(query));
+        conversationExpandLabel.textContent = `Zobrazit celý seznam (${formatter.format(channels.length)})`;
+        conversationCount.textContent = `Nalezeno ${formatter.format(matches.length)} z ${formatter.format(channels.length)} konverzací · ${formatter.format(total)} zpráv v období.`;
+        topConversations.replaceChildren();
+        allConversations.replaceChildren();
+        if (!channels.length) topConversations.append(makeEmptyList('V tomto období nejsou žádné zprávy.'));
+        channels.slice(0, 10).forEach((channel, index) => addConversationRow(channel, index, total, topConversations));
+        if (!matches.length) allConversations.append(makeEmptyList('Hledání neodpovídá žádné konverzaci.'));
+        matches.forEach((channel, index) => addConversationRow(channel, index, total, allConversations));
+      }
+
+      function addConversationRow(channel, index, total, container) {
+          const row = document.createElement('div');
+          row.className = 'top-channel';
+          row.title = `${channel.label} · ID ${channel.id}`;
+          const name = document.createElement('span');
+          name.className = 'top-channel-name';
+          name.textContent = `${index + 1}. ${channel.label}`;
+          const count = document.createElement('span');
+          count.className = 'top-channel-count';
+          count.textContent = `${formatter.format(channel.count)} · ${total ? (channel.count / total * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 }) : 0} %`;
+          row.append(name, count);
+          container.append(row);
+      }
+
+      function renderInsightStats() {
+        const scopedEvents = getPeriodFilteredEvents();
+        const days = new Map();
+        const hours = Array(24).fill(0);
+        const wordCounts = new Map();
+        for (const event of scopedEvents) {
+          const key = dayKey(event.date);
+          days.set(key, (days.get(key) || 0) + 1);
+          hours[event.date.getHours()]++;
+          for (const wordId of event.words || []) wordCounts.set(wordId, (wordCounts.get(wordId) || 0) + 1);
+        }
+        const dayRows = [...days].map(([key, count]) => ({ label: dateFormatter.format(fromDayKey(key)), key, count }))
+          .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+        const wordRows = [...wordCounts].map(([id, count]) => ({ label: wordTerms[id], count }))
+          .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'cs-CZ'));
+        const hourRows = hours.map((count, hour) => ({ label: `${String(hour).padStart(2, '0')}:00–${String((hour + 1) % 24).padStart(2, '0')}:00`, shortLabel: `${String(hour).padStart(2, '0')} h`, count, hour }));
+        const topHourRows = [...hourRows].sort((a, b) => b.count - a.count || a.hour - b.hour).slice(0, 10);
+        insightData = { dayRows, wordRows, hourRows, topHourRows };
+        renderInsightLists();
+      }
+
+      function renderInsightLists() {
+        if (!insightData) return;
+        const { dayRows, wordRows, hourRows, topHourRows } = insightData;
+        const dayQuery = daySearch.value.trim().toLocaleLowerCase('cs-CZ');
+        const wordQuery = wordSearch.value.trim().toLocaleLowerCase('cs-CZ');
+        const filteredDays = dayRows.filter(row => row.label.toLocaleLowerCase('cs-CZ').includes(dayQuery));
+        const filteredWords = wordRows.filter(row => row.label.toLocaleLowerCase('cs-CZ').includes(wordQuery));
+
+        renderMiniRows(topDays, dayRows.slice(0, 10), dayRows[0]?.count || 0);
+        daysExpandLabel.textContent = `Všechny dny (${formatter.format(dayRows.length)})`;
+        renderMiniRows(allDays, filteredDays, dayRows[0]?.count || 0, false, dayQuery ? 'Hledání neodpovídá žádnému dni.' : 'V tomto období nejsou žádné zprávy.');
+        renderMiniRows(hourlyActivity, topHourRows, topHourRows[0]?.count || 0, true);
+        renderMiniRows(allHours, hourRows, Math.max(1, ...hourRows.map(row => row.count)), true);
+        renderMiniRows(topWords, wordRows.slice(0, 10), wordRows[0]?.count || 0, false, 'V tomto období nejsou žádná textová slova.');
+        wordsExpandLabel.textContent = `Všechna slova (${formatter.format(wordRows.length)})`;
+        renderMiniRows(allWords, filteredWords, wordRows[0]?.count || 0, false, wordQuery ? 'Hledání neodpovídá žádnému slovu.' : 'V tomto období nejsou žádná textová slova.');
+      }
+
+      function renderDaySearch() { renderInsightLists(); }
+      function renderWordSearch() { renderInsightLists(); }
+
+      function renderMiniRows(container, rows, maxCount, hourly = false, emptyMessage = 'V tomto období nejsou žádná data.') {
+        container.replaceChildren();
+        if (!rows.length) {
+          container.append(makeEmptyList(emptyMessage));
+          return;
+        }
+        rows.forEach((row, index) => {
+          const item = document.createElement('div');
+          item.className = 'mini-stat-row';
+          const rank = document.createElement('span');
+          rank.className = 'mini-stat-rank';
+          rank.textContent = hourly ? '' : `${index + 1}.`;
+          const label = document.createElement('span');
+          label.className = 'mini-stat-label';
+          label.textContent = hourly ? row.shortLabel : row.label;
+          const value = document.createElement('strong');
+          value.className = 'mini-stat-value';
+          value.textContent = formatter.format(row.count);
+          item.append(rank, label, value);
+          if (maxCount > 0) {
+            const track = document.createElement('div');
+            track.className = 'mini-stat-track';
+            const fill = document.createElement('div');
+            fill.className = 'mini-stat-fill';
+            fill.style.width = `${row.count / maxCount * 100}%`;
+            track.append(fill);
+            item.append(track);
+          }
+          container.append(item);
+        });
+      }
+
+      function makeEmptyList(message) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-list';
+        empty.textContent = message;
+        return empty;
+      }
+
+      function showTooltip(row, clientX, clientY) {
+        const bounds = chartWrap.getBoundingClientRect();
+        const x = Math.max(78, Math.min(bounds.width - 78, clientX - bounds.left));
+        const y = Math.max(88, clientY - bounds.top);
+        tooltip.replaceChildren();
+        const number = document.createElement('strong');
+        number.textContent = `${formatter.format(row.count)} zpráv`;
+        const label = document.createElement('span');
+        label.textContent = describeBucket(row);
+        const average = document.createElement('span');
+        if (Number(smoothing.value)) average.textContent = `Vyhlazený průměr: ${formatter.format(Math.round(row.trend))} zpráv`;
+        tooltip.append(number, label);
+        if (average.textContent) tooltip.append(average);
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+        tooltip.classList.add('visible');
+      }
+
+      function hideTooltip() { tooltip.classList.remove('visible'); }
+
+      function attachTooltip(target, row) {
+        target.addEventListener('pointerenter', event => showTooltip(row, event.clientX, event.clientY));
+        target.addEventListener('pointermove', event => showTooltip(row, event.clientX, event.clientY));
+        target.addEventListener('pointerleave', hideTooltip);
+        target.addEventListener('focus', () => {
+          const bounds = target.getBoundingClientRect();
+          showTooltip(row, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        });
+        target.addEventListener('blur', hideTooltip);
+      }
+
+      function updateSmoothingOptions() {
+        const settings = period === 'day'
+          ? [{ value: 0, label: 'Bez vyhlazení' }, { value: 7, label: '7denní průměr' }, { value: 14, label: '14denní průměr' }, { value: 30, label: '30denní průměr' }]
+          : period === 'week'
+            ? [{ value: 0, label: 'Bez vyhlazení' }, { value: 4, label: '4týdenní průměr' }, { value: 12, label: '12týdenní průměr' }, { value: 26, label: '26týdenní průměr' }]
+            : [{ value: 0, label: 'Bez vyhlazení' }, { value: 4, label: '4týdenní průměr' }, { value: 13, label: '13týdenní průměr' }, { value: 26, label: '26týdenní průměr' }];
+        smoothing.replaceChildren();
+        for (const setting of settings) {
+          const option = document.createElement('option');
+          option.value = String(setting.value);
+          option.textContent = setting.label;
+          smoothing.append(option);
+        }
+        smoothing.value = String(period === 'day' ? 7 : period === 'week' ? 4 : 13);
+      }
+
+      function defaultWindowSize(total) {
+        const suggested = period === 'day' ? 365 : period === 'week' ? 156 : total;
+        return Math.min(total, suggested);
+      }
+
+      function smoothRows(rows, size) {
+        if (!size) return rows.map(row => ({ ...row, trend: row.count }));
+        const before = Math.floor((size - 1) / 2);
+        const after = size - before - 1;
+        return rows.map((row, index) => {
+          const start = Math.max(0, index - before);
+          const end = Math.min(rows.length - 1, index + after);
+          let sum = 0;
+          for (let i = start; i <= end; i++) sum += rows[i].count;
+          return { ...row, trend: sum / (end - start + 1) };
+        });
+      }
+
+      function renderChart() {
+        const allRows = smoothRows(bucketData(), Number(smoothing.value));
+        hideTooltip();
+        chart.replaceChildren();
+        emptyState.hidden = true;
+        const lastIndex = Math.max(0, allRows.length - 1);
+        if (rangeStart < 0 || rangeEnd < 0 || rangeEnd > lastIndex || rangeStart > lastIndex) {
+          rangeEnd = lastIndex;
+          rangeStart = Math.max(0, rangeEnd - defaultWindowSize(allRows.length) + 1);
+        }
+        rangeStart = Math.max(0, Math.min(rangeStart, rangeEnd - (allRows.length > 1 ? 1 : 0)));
+        rangeEnd = Math.max(rangeStart, Math.min(rangeEnd, lastIndex));
+        const rows = allRows.slice(rangeStart, rangeEnd + 1);
+        const endDate = row => period === 'day' ? row.date : new Date(row.date.getFullYear(), row.date.getMonth(), row.date.getDate() + 6);
+        navigator.hidden = allRows.length < 2;
+        rangeStartSlider.max = rangeEndSlider.max = String(lastIndex);
+        rangeStartSlider.value = String(rangeStart);
+        rangeEndSlider.value = String(rangeEnd);
+        if (rows.length) {
+          windowLabel.textContent = `${dateFormatter.format(rows[0].date)} – ${dateFormatter.format(endDate(rows.at(-1)))}`;
+          historyStart.textContent = dateFormatter.format(allRows[0].date);
+          historyEnd.textContent = dateFormatter.format(endDate(allRows.at(-1)));
+          rangeStartSlider.setAttribute('aria-valuetext', dateFormatter.format(rows[0].date));
+          rangeEndSlider.setAttribute('aria-valuetext', dateFormatter.format(endDate(rows.at(-1))));
+        }
+        const leftPercent = lastIndex ? rangeStart / lastIndex * 100 : 0;
+        const rightPercent = lastIndex ? rangeEnd / lastIndex * 100 : 100;
+        rangeBrush.style.setProperty('--range-left', `${leftPercent}%`);
+        rangeBrush.style.setProperty('--range-width', `${Math.max(0, rightPercent - leftPercent)}%`);
+        const smoothName = smoothing.options[smoothing.selectedIndex]?.textContent || 'bez vyhlazení';
+        chartHint.textContent = period === 'year'
+          ? `Roční pohled používá týdenní počty; osa x označuje roky. Čára: ${smoothName}. Posuň oba úchyty pro výběr období.`
+          : `Počty zpráv po ${period === 'day' ? 'dnech' : 'týdnech'} · ${smoothName}. Posuň oba úchyty pro výběr období; bod ukazuje přesný počet.`;
+
+        const width = 1000, height = 340;
+        const margin = { top: 16, right: 22, bottom: 48, left: 60 };
+        const plotWidth = width - margin.left - margin.right;
+        const plotHeight = height - margin.top - margin.bottom;
+        const smoothingSize = Number(smoothing.value);
+        const max = Math.max(1, ...rows.map(row => row.trend));
+        const ceiling = niceCeiling(max);
+        const x = index => margin.left + (rows.length <= 1 ? plotWidth / 2 : index * plotWidth / (rows.length - 1));
+        const y = value => margin.top + plotHeight - value / ceiling * plotHeight;
+
+        for (let tick = 0; tick <= 4; tick++) {
+          const value = ceiling * tick / 4;
+          const yy = y(value);
+          add('line', { x1: margin.left, y1: yy, x2: width - margin.right, y2: yy, stroke: '#263144', 'stroke-width': 1 });
+          addText(margin.left - 12, yy + 4, formatter.format(Math.round(value)), { 'text-anchor': 'end', fill: '#8290a6', 'font-size': 11 });
+        }
+
+        let tickIndices;
+        if (period === 'year') {
+          tickIndices = [];
+          let previousYear = null;
+          rows.forEach((row, index) => {
+            const year = row.date.getFullYear();
+            if (year !== previousYear) tickIndices.push(index);
+            previousYear = year;
+          });
+        } else {
+          const tickCount = Math.min(rows.length, 9);
+          tickIndices = [...new Set(Array.from({ length: tickCount }, (_, i) => Math.round(i * (rows.length - 1) / Math.max(1, tickCount - 1))))];
+        }
+        for (const index of tickIndices) {
+          const row = rows[index];
+          const label = period === 'day'
+            ? new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short' }).format(row.date)
+            : period === 'week' ? monthFormatter.format(row.date) : String(row.date.getFullYear());
+          add('line', { x1: x(index), y1: margin.top + plotHeight, x2: x(index), y2: margin.top + plotHeight + 5, stroke: '#42506a' });
+          addText(x(index), height - 17, label, { 'text-anchor': index === 0 ? 'start' : index === rows.length - 1 ? 'end' : 'middle', fill: '#9aa7bb', 'font-size': 11 });
+        }
+
+        const plotted = rows.map((row, index) => ({ x: x(index), y: y(row.trend) }));
+        const curve = makeCurvePath(plotted);
+        if (plotted.length > 1) {
+          const area = `${curve} L ${plotted.at(-1).x} ${margin.top + plotHeight} L ${plotted[0].x} ${margin.top + plotHeight} Z`;
+          add('path', { d: area, fill: 'url(#areaFill)' });
+          add('path', { d: curve, fill: 'none', stroke: '#aab7ff', 'stroke-width': 3.25, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' });
+        }
+        rows.forEach((row, index) => {
+          const cx = x(index), cy = y(row.trend);
+          if (!smoothingSize) add('circle', { cx, cy, r: rows.length > 100 ? 2 : 3.5, fill: '#c2cbff', stroke: '#141c2c', 'stroke-width': 1, 'pointer-events': 'none' });
+          const hit = add('circle', { cx, cy, r: 12, fill: 'transparent', stroke: 'transparent', 'stroke-width': 1, tabindex: 0, role: 'img', 'aria-label': `${describeBucket(row)}: ${formatter.format(row.count)} zpráv`, style: 'cursor: crosshair' });
+          attachTooltip(hit, row);
+        });
+        periodEventsCache = null;
+        insightData = null;
+        renderWeekdayStats();
+        renderTopConversations();
+        renderInsightStats();
+        const scope = selectedBucketWindow();
+        if (scope) {
+          const lastDay = new Date(scope.endExclusive);
+          lastDay.setDate(lastDay.getDate() - 1);
+          analyticsScope.textContent = `Statistiky odpovídají vybraným filtrům a období ${dateFormatter.format(scope.start)} – ${dateFormatter.format(lastDay)}.`;
+        }
+      }
+
+      function makeCurvePath(points) {
+        if (!points.length) return '';
+        let path = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 0; i < points.length - 1; i++) {
+          const previous = points[Math.max(0, i - 1)];
+          const start = points[i];
+          const end = points[i + 1];
+          const next = points[Math.min(points.length - 1, i + 2)];
+          const c1x = start.x + (end.x - previous.x) / 6;
+          const c1y = start.y + (end.y - previous.y) / 6;
+          const c2x = end.x - (next.x - start.x) / 6;
+          const c2y = end.y - (next.y - start.y) / 6;
+          path += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${end.x} ${end.y}`;
+        }
+        return path;
+      }
+
+      function niceCeiling(value) {
+        const raw = value / 4;
+        const power = 10 ** Math.floor(Math.log10(Math.max(1, raw)));
+        const fraction = raw / power;
+        const step = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
+        return Math.max(4, step * power * 4);
+      }
+
+      function describeBucket(row) {
+        if (period === 'day') return dateFormatter.format(row.date);
+        const end = new Date(row.date.getFullYear(), row.date.getMonth(), row.date.getDate() + 6);
+        return `${dateFormatter.format(row.date)} – ${dateFormatter.format(end)}`;
+      }
+
+      function add(name, attributes) {
+        const element = document.createElementNS(NS, name);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+        if (name === 'path' && attributes.fill === 'url(#areaFill)' && !chart.querySelector('defs')) {
+          const defs = document.createElementNS(NS, 'defs');
+          defs.innerHTML = '<linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#8998f5" stop-opacity=".29"/><stop offset="100%" stop-color="#8998f5" stop-opacity="0"/></linearGradient>';
+          chart.append(defs);
+        }
+        chart.append(element);
+        return element;
+      }
+
+      function addText(x, y, text, attributes) {
+        const element = add('text', { x, y, ...attributes });
+        element.textContent = text;
+      }
+
+      function showError(message) {
+        status.classList.add('error');
+        status.textContent = message;
+      }
+    })();
+  </script>
+</body>
+</html>
