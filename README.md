@@ -24,6 +24,10 @@ The current interface is in Czech. Each valid record counts as a message, includ
 
 [Detailed documentation](README-DETAILS.md) · [All releases](https://github.com/FajkPes/Discord-Activity-Graph-Viewer/releases)
 
+## Reading the results
+
+Use one activity filter to compare all messages with a person, group or server over a chosen period. The top lists show conversations, days, hours and words and can be expanded or searched. Duplicate message IDs are counted once; invalid files or timestamps are reported. The word-frequency list excludes common Czech words and links, so its filtering is not language-neutral.
+
 ## Credits
 
 **Idea, concept and design:** FajkPes  
