@@ -23,3 +23,8 @@ This local viewer turns a Discord data export into an activity graph, so you can
 The current interface is in Czech. Each valid record counts as a message, including messages without text. The app does not store or upload the selected data.
 
 [Detailed documentation](README-DETAILS.md) · [All releases](https://github.com/FajkPes/Discord-Activity-Graph-Viewer/releases)
+
+## Credits
+
+**Idea, concept and design:** FajkPes  
+**Coding:** ChatGPT Codex, Claude and Google Antigravity
